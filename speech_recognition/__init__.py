@@ -571,7 +571,7 @@ class Recognizer(AudioSource):
             target_energy = energy * self.dynamic_energy_ratio
             self.energy_threshold = self.energy_threshold * damping + target_energy * (1 - damping)
 
-    def snowboy_wait_for_hot_word(self, snowboy_location, snowboy_hot_word_files, source, timeout=None):
+    def snowboy_wait_for_hot_word(self, snowboy_location, snowboy_hot_word_files, source, sensitivity, timeout=None):
         # load snowboy library (NOT THREAD SAFE)
         sys.path.append(snowboy_location)
         import snowboydetect
@@ -582,7 +582,7 @@ class Recognizer(AudioSource):
             model_str=",".join(snowboy_hot_word_files).encode()
         )
         detector.SetAudioGain(1.0)
-        detector.SetSensitivity(",".join(["0.4"] * len(snowboy_hot_word_files)).encode())
+        detector.SetSensitivity(",".join([sensitivity] * len(snowboy_hot_word_files)).encode())
         snowboy_sample_rate = detector.SampleRate()
 
         elapsed_time = 0
@@ -634,7 +634,7 @@ class Recognizer(AudioSource):
             assert os.path.isfile(os.path.join(snowboy_configuration[0], "snowboydetect.py")), "``snowboy_configuration[0]`` must be a Snowboy root directory containing ``snowboydetect.py``"
             for hot_word_file in snowboy_configuration[1]:
                 assert os.path.isfile(hot_word_file), "``snowboy_configuration[1]`` must be a list of Snowboy hot word configuration files"
-
+                # TODO Pass a matching list of sensitivities, and match them below.
         seconds_per_buffer = float(source.CHUNK) / source.SAMPLE_RATE
         pause_buffer_count = int(math.ceil(self.pause_threshold / seconds_per_buffer))  # number of buffers of non-speaking audio during a phrase, before the phrase should be considered complete
         phrase_buffer_count = int(math.ceil(self.phrase_threshold / seconds_per_buffer))  # minimum number of buffers of speaking audio before we consider the speaking audio a phrase
@@ -671,8 +671,9 @@ class Recognizer(AudioSource):
                         self.energy_threshold = self.energy_threshold * damping + target_energy * (1 - damping)
             else:
                 # read audio input until the hotword is said
-                snowboy_location, snowboy_hot_word_files = snowboy_configuration
-                buffer, delta_time = self.snowboy_wait_for_hot_word(snowboy_location, snowboy_hot_word_files, source, timeout)
+                snowboy_location, snowboy_hot_word_files, sensitivity = snowboy_configuration
+                buffer, delta_time = self.snowboy_wait_for_hot_word(
+                    snowboy_location, snowboy_hot_word_files, source, sensitivity, timeout)
                 elapsed_time += delta_time
                 if len(buffer) == 0: break  # reached end of the stream
                 frames.append(buffer)
